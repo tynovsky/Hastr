@@ -3,7 +3,18 @@ use 5.008001;
 use strict;
 use warnings;
 
-our $VERSION = "0.01";
+our $VERSION = '0.1.0';
+
+sub new {
+    my ($class, %conf) = @_;
+    return bless \%conf, $class;
+}
+
+sub about {
+    my ($self, $c) = @_;
+
+    $c->render(template => 'about');
+}
 
 
 

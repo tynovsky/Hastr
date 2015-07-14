@@ -29,7 +29,7 @@ sub get_file {
 
     for my $node (shuffle @{ $self->{others} }) {
         if ($self->{ua}->head($node . '/' . $file->name)->res->code == 200) {
-            return $c->redirect_to("$node/file/" . $file->hash);
+            return $c->redirect_to("http://$node/file/" . $file->hash);
         }
     }
 

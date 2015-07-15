@@ -2,7 +2,7 @@ package Hastr::File;
 use 5.008001;
 use strict;
 use warnings;
-use Path::Tiny;
+use Path::Tiny qw(path);
 
 sub new {
     my ($class, %args) = @_;
@@ -28,18 +28,36 @@ sub name {
 sub filepath {
     my ($self) = @_;
 
-    return Path::Tiny::path($self->{root} . '/' . $self->name);
+    return path($self->{root} . '/' . $self->name);
+}
+
+sub backup_path {
+    my ($self, $node) = @_;
+
+    return path($self->{backups} . '/' . $node . '/' . $self->name);
 }
 
 sub write {
     my ($self, $backup_node) = @_;
 
-    $self->filepath->parent->mkpath();
-    $self->upload->move_to($self->filepath);
+    my $filepath    = $self->filepath();
+    my $backup_path = $self->backup_path($backup_node);
 
-    my $backup = Path::Tiny::path($self->{backups} . '/' . $backup_node);
-    $backup->parent->mkpath();
-    $backup->append([$self->{hash}]);
+    $filepath->parent->mkpath();
+    $self->upload->move_to($filepath);
+
+    $backup_path->parent->mkpath();
+    symlink($filepath, $backup_path)
+        or die "Failed to create symlink $backup_path: $!";
+
+}
+
+sub delete {
+    my ($self, $node) = @_;
+
+    $self->filepath->remove()
+    $self->backup_path($node)->remove();
+
 }
 
 sub exists {

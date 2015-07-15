@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use List::Util qw(shuffle);
 use Hastr::File;
+use Path::Tiny qw(path);
 
 our $VERSION = '0.1.0';
 
@@ -76,7 +77,50 @@ sub post_file {
         $file->write($node);
     }
 
-    $c->render(text => 'Written to ' . $from ? 1 : 2);
+    $c->render(text => 'Written to ' . ($from ? 1 : 2));
+}
+
+sub delete_file {
+    my ($self, $c) = @_;
+
+    my $from = $c->req->param('from');
+
+    my $file = Hastr::File->new(
+        root => $self->{root},
+        backups => $self->{backups},
+        hash => $c->param('hash'),
+    );
+
+    $file->delete($from);
+}
+
+sub change_mirror_of_random_file {
+    my ($self, $new_mirror) = @_;
+
+    # pick random mirror
+    my $old_mirror = $self->pick_other_node();
+
+    # from the mirror, pick random file
+    my $path = glob($self->{backups} . '/' . $old_mirror);
+    for (1 .. 4) { #4 levels deep = 3 levels of dirs, then 1 file
+        my @files = glob("$path/*");
+        $path     = $files[rand @files];
+    }
+
+    # delete the file from the mirror
+    my $tx = $self->{ua}->delete(
+        "$node/file/" . $file->hash . "?from=$self->{me}"
+    );
+
+    # post the file to the new mirror
+    my $tx = $self->{ua}->post(
+        "$node/file/" . $file->hash . "?from=$self->{me}"
+        => form
+        => { file => $path } #TODO: asset?
+    );
+
+    # put the file to the new mirror's backup dir
+    # TODO
 }
 
 sub pick_other_node {

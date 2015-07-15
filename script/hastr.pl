@@ -14,3 +14,9 @@ post '/file/:hash' => sub { $hastr->post_file(@_) };
 
 app->static->paths([$config->{root}]);
 app->start;
+
+__DATA__
+
+@@ not_found.development.html.ep
+404 Not found
+

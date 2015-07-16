@@ -54,6 +54,12 @@
       }
    },
    "release_status" : "unstable",
+   "resources" : {
+      "repository" : {
+         "type" : "git",
+         "url" : "git://git.int.avast.com/viruslab-systems/Hastr.git"
+      }
+   },
    "version" : "0.1.0",
    "x_authority" : "cpan:TYNOVSKY"
 }

@@ -5,15 +5,18 @@ use warnings;
 use List::Util qw(shuffle);
 use Hastr::File;
 use Path::Tiny qw(path);
+use Hastr::Client;
 
 our $VERSION = '0.1.0';
 
 sub new {
     my ($class, $args) = @_;
     my %args = %$args;
-    $args{ua} = Mojo::UserAgent->new();
+    $args{client} = Hastr::Client->new();
     return bless \%args, $class;
 }
+
+sub client { shift->{client} }
 
 sub about {
     my ($self, $c) = @_;
@@ -32,7 +35,7 @@ sub get_file {
     return $c->reply->static($file->name) if $file->exists();
 
     for my $node (shuffle @{ $self->{others} }) {
-        if ($self->{ua}->head($node . '/' . $file->name)->res->code == 200) {
+        if ($self->client->exists_file($node, $file->name)) {
             return $c->redirect_to("http://$node/file/" . $file->hash);
         }
     }
@@ -46,15 +49,15 @@ sub post_file {
     my $backup_node = $c->req->param('backup-node');
 
     my $file = Hastr::File->new(
-        hash => $c->param('hash'),
-        root => $self->{root},
+        hash    => $c->param('hash'),
+        root    => $self->{root},
         backups => $self->{backups},
     );
 
     my $upload = $c->req->upload('file');
 
     if ($file->exists()) {
-        return $c->render(text => 'Already exists', status => 409);
+        return $c->render(text => 'Exists', status => 409);
     }
 
     if ($backup_node) {
@@ -65,16 +68,17 @@ sub post_file {
         my $retries;
         while (1) {
             $backup_node = $self->pick_other_node();
-            my $tx = $self->{ua}->post(
-                "$node/file/" . $file->hash . "?backup-node=$self->{me}"
-                => form
-                => { file => { file => $file->upload->asset } }
+            my $res = $self->client->post_file(
+                node        => $backup_node,
+                hash        => $file->hash,
+                asset       => $upload->asset,
+                backup_node => $self->{me},
             );
 
-            return $c->render(text => 'Already exists', status => 409)
-                if $tx->res->code == 409;
+            return $c->render(text => 'Exists', status => 409)
+                if $res->code == 409;
             last
-                if $tx->res->code == 200;
+                if $res->code == 200;
             die 'Failed to create backup on another node'
                 if ++$retries > 3;
             sleep 1
@@ -82,7 +86,6 @@ sub post_file {
         $file->write($upload, $backup_node);
         $c->render(text => 'Written and backed-up');
     }
-
 }
 
 sub delete_file {
@@ -91,8 +94,8 @@ sub delete_file {
     my $backup_node = $c->req->param('backup-node');
 
     my $file = Hastr::File->new(
-        hash => $c->param('hash'),
-        root => $self->{root},
+        hash    => $c->param('hash'),
+        root    => $self->{root},
         backups => $self->{backups},
     );
 
@@ -109,21 +112,22 @@ sub change_backup_node_of_random_file {
     # from the old backup node, pick random file
     my $file = Hastr::File->random_from_backup_node(
         $old_backup_node,
-        root => $self->{root},
+        root    => $self->{root},
         backups => $self->{backups},
     );
 
     # post the file to the new backup node
-    my $tx = $self->{ua}->post(
-        "$node/file/" . $file->hash . "?backup-node=$self->{me}"
-        => form
-        => { file => Mojo::Asset::File->new(path => $file->path) }
+    #TODO: error handling
+    $self->client->post_file(
+        node        => $new_backup_node,
+        hash        => $file->hash,
+        path        => $file->path,
+        backup_node => $self->{me},
     );
 
     # delete the file from the old backup node
-    my $tx = $self->{ua}->delete(
-        "$node/file/" . $file->hash . "?backup-node=$self->{me}"
-    );
+    #TODO: error handling
+    $self->client->delete($old_backup_node, $file->hash, $self->{me});
 
     # move the symlink from the old backup dir to the new backup dir
     #TODO: error handling
@@ -139,7 +143,6 @@ sub pick_other_node {
     my @nodes = keys %nodes;
     return $nodes[rand @nodes];
 }
-
 
 1;
 __END__

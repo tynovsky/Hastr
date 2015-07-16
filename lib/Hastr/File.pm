@@ -20,7 +20,7 @@ sub random_from_backup_node {
         $path     = $files[rand @files];
     }
 
-    $self->{hash} = Path::Tiny::path($path)->basename =~ s/[.]dat$//r
+    $self->{hash} = Path::Tiny::path($path)->basename =~ s/[.]dat$//r;
 
     return $self;
 }
@@ -65,7 +65,7 @@ sub create_backup_symlink {
 sub delete {
     my ($self, $node) = @_;
 
-    $self->filepath->remove()
+    $self->filepath->remove();
     $self->backup_path($node)->remove();
 
 }

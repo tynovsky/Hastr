@@ -69,7 +69,7 @@ sub post_file {
         while (1) {
             $backup_node = $self->pick_other_node();
             my $res = $self->client->post_file(
-                node        => $node,
+                node        => $backup_node,
                 hash        => $file->hash,
                 asset       => $upload->asset,
                 backup_node => $self->{me},
@@ -117,15 +117,17 @@ sub change_backup_node_of_random_file {
     );
 
     # post the file to the new backup node
-    my $res = $self->client->post_file(
-        node        => $node,
+    #TODO: error handling
+    $self->client->post_file(
+        node        => $new_backup_node,
         hash        => $file->hash,
         path        => $file->path,
         backup_node => $self->{me},
     );
 
     # delete the file from the old backup node
-    my $res = $self->client->delete($node, $file->hash, $self->{me});
+    #TODO: error handling
+    $self->client->delete($old_backup_node, $file->hash, $self->{me});
 
     # move the symlink from the old backup dir to the new backup dir
     #TODO: error handling
@@ -141,7 +143,6 @@ sub pick_other_node {
     my @nodes = keys %nodes;
     return $nodes[rand @nodes];
 }
-
 
 1;
 __END__

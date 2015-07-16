@@ -44,7 +44,7 @@ sub get_file {
     my $tx = $self->{ua}->get("http://$node/file/$hash");
 
     return $tx->res
-)
+}
 
 sub exists_file {
     my ($self, $node, $name) = @_;

@@ -5,11 +5,9 @@ use warnings;
 use Mojo::UserAgent;
 use Mojo::Asset::File;
 
-our $VERSION = '0.1.0';
-
 sub new {
     my ($class, $args) = @_;
-    my %args = %$args;
+    my %args = %{$args // {}};
     $args{ua} = Mojo::UserAgent->new(
         max_connecions => delete $args{max_connections} // 10,
         max_redirects  => delete $args{max_redirectes}  // 10,
@@ -61,3 +59,5 @@ sub delete_file {
 
     return $tx->res;
 }
+
+1;

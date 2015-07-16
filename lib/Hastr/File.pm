@@ -48,8 +48,8 @@ sub backup_path {
 sub write {
     my ($self, $upload, $backup_node) = @_;
 
-    $self->filepath->parent->mkpath();
-    $upload->move_to($self->filepath);
+    $self->path->parent->mkpath();
+    $upload->move_to($self->path);
     $self->create_backup_symlink($backup_node);
 }
 
@@ -58,20 +58,20 @@ sub create_backup_symlink {
 
     my $backup_path = $self->backup_path($backup_node);
     $backup_path->parent->mkpath();
-    symlink($self->filepath, $backup_path)
+    symlink($self->path, $backup_path)
         or die "Failed to create symlink $backup_path: $!";
 }
 
 sub delete {
     my ($self, $node) = @_;
 
-    $self->filepath->remove();
+    $self->path->remove();
     $self->backup_path($node)->remove();
 
 }
 
 sub exists {
-    return shift->filepath->exists()
+    return shift->path->exists()
 }
 
 1;

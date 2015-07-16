@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use List::Util qw(shuffle);
 use Hastr::File;
+use Path::Tiny qw(path);
 
 our $VERSION = '0.1.0';
 
@@ -23,7 +24,10 @@ sub about {
 sub get_file {
     my ($self, $c) = @_;
 
-    my $file = Hastr::File->new(hash => $c->param('hash'), root => $self->{root});
+    my $file = Hastr::File->new(
+        hash => $c->param('hash'),
+        root => $self->{root}
+    );
 
     return $c->reply->static($file->name) if $file->exists();
 
@@ -39,28 +43,30 @@ sub get_file {
 sub post_file {
     my ($self, $c) = @_;
 
-    my $from = $c->req->param('from');
+    my $backup_node = $c->req->param('backup-node');
 
     my $file = Hastr::File->new(
+        hash => $c->param('hash'),
         root => $self->{root},
         backups => $self->{backups},
-        hash => $c->param('hash'),
-        upload => $c->req->upload('file'),
     );
+
+    my $upload = $c->req->upload('file');
 
     if ($file->exists()) {
         return $c->render(text => 'Already exists', status => 409);
     }
 
-    if ($from) {
-        $file->write($from);
+    if ($backup_node) {
+        $file->write($upload, $backup_node);
+        return $c->render(text => 'Backed-up');
     }
     else {
-        my ($node, $retries);
+        my $retries;
         while (1) {
-            $node = $self->pick_other_node();
+            $backup_node = $self->pick_other_node();
             my $tx = $self->{ua}->post(
-                "$node/file/" . $file->hash . "?from=$self->{me}"
+                "$node/file/" . $file->hash . "?backup-node=$self->{me}"
                 => form
                 => { file => { file => $file->upload->asset } }
             );
@@ -73,10 +79,56 @@ sub post_file {
                 if ++$retries > 3;
             sleep 1
         }
-        $file->write($node);
+        $file->write($upload, $backup_node);
+        $c->render(text => 'Written and backed-up');
     }
 
-    $c->render(text => 'Written to ' . $from ? 1 : 2);
+}
+
+sub delete_file {
+    my ($self, $c) = @_;
+
+    my $backup_node = $c->req->param('backup-node');
+
+    my $file = Hastr::File->new(
+        hash => $c->param('hash'),
+        root => $self->{root},
+        backups => $self->{backups},
+    );
+
+    $file->delete($backup_node);
+}
+
+sub change_backup_node_of_random_file {
+    my ($self, $new_backup_node) = @_;
+
+    # pick random mirror
+    my $old_backup_node = $self->pick_other_node();
+    $new_backup_node //= $self->pick_other_node([$old_backup_node]);
+
+    # from the old backup node, pick random file
+    my $file = Hastr::File->random_from_backup_node(
+        $old_backup_node,
+        root => $self->{root},
+        backups => $self->{backups},
+    );
+
+    # post the file to the new backup node
+    my $tx = $self->{ua}->post(
+        "$node/file/" . $file->hash . "?backup-node=$self->{me}"
+        => form
+        => { file => Mojo::Asset::File->new(path => $file->path) }
+    );
+
+    # delete the file from the old backup node
+    my $tx = $self->{ua}->delete(
+        "$node/file/" . $file->hash . "?backup-node=$self->{me}"
+    );
+
+    # move the symlink from the old backup dir to the new backup dir
+    #TODO: error handling
+    $file->backup_path($old_backup_node)->remove();
+    $file->create_backup_symlink($new_backup_node);
 }
 
 sub pick_other_node {

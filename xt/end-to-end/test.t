@@ -5,26 +5,32 @@ use warnings;
 use Test::More;
 use Path::Tiny;
 use FindBin qw($Bin);
+use Time::HiRes qw(time);
 
 use lib "$Bin/../../lib";
 use Hastr::Client;
 
-system <<'EOI';
+system "cp $Bin/*.conf $Bin/../../script/";
+
+system <<"EOI";
 bash -c '
-cd ../../;
+cd $Bin/../../;
 tmux new-session -d -s hastr
 for i in {0..4}; do
-    tmux new-window -n $i \
-        "PERL5LIB=$PERL5LIB:lib MOJO_CONFIG=hastr300$i.conf perl script/hastr.pl daemon --listen http://*:300$i; echo "ENDED"; read key";
+    tmux new-window "PERL5LIB=\$PERL5LIB:lib MOJO_CONFIG=hastr300\$i.test.conf perl script/hastr.pl daemon --listen http://*:300\$i; echo ENDED; read key"
 done
 '
 EOI
 
+sleep 1; # wait for servers to get started
+
 # generate random files
 
-my $multiplier = 10;
-my $min = 1_000;
-my $max = 1_000_000;
+my $time_taken = -time();
+
+my $multiplier = 3;
+my $min = 10_000;
+my $max = 100_000;
 my $size_limit = 1_000_000;
 
 my $number_of_generated_files = 0;
@@ -45,10 +51,16 @@ while ($current_size <= $max) {
     $current_size *= $multiplier;
 }
 
-note "total size of generated files: $total_generated_size";
+$time_taken += time();
+
+note sprintf('Generation took %.2f seconds', $time_taken);
+note sprintf(
+    'total size of generated files: %.2f MB',
+    $total_generated_size / 1000_000
+);
 
 # post all the files (measure time)
-my $time_taken = -time;
+$time_taken = -time();
 my $client = Hastr::Client->new();
 for my $file (glob('*.dat')) {
     $client->post_file(
@@ -57,18 +69,26 @@ for my $file (glob('*.dat')) {
         hash => $file =~ s/\.dat$//r,
     );
 };
-$time_taken += time;
-note "posting took $time_taken seconds";
+$time_taken += time();
+note sprintf("posting took %.2f seconds", $time_taken);
+note sprintf(
+    'speed: %.2f MB/s',
+    ($total_generated_size / 1_000_000) / $time_taken
+);
 
 # get all the files (measure time)
-$time_taken = -time;
+$time_taken = -time();
 for my $file (glob('*.dat')) {
     my $node = 'localhost:300' . int(rand(5));
     my $res = $client->get_file($node, $file =~ s/\.dat$//r);
     path("$file.gotten")->spew($res->body);
 }
-$time_taken += time;
-note "getting took $time_taken seconds";
+$time_taken += time();
+note sprintf("getting took %.2f seconds", $time_taken);
+note sprintf(
+    'speed: %.2f MB/s',
+    ($total_generated_size / 1_000_000) / $time_taken
+);
 
 # check if gotten all the files (prove the posting was succesful)
 my $number_of_correct_files = 0;
@@ -86,6 +106,7 @@ is(
 
 system("tmux kill-session -t hastr");
 system("rm -rf /tmp/hastr300[0-4]");
+system "rm $Bin/../../script/*.test.conf";
 
 done_testing;
 

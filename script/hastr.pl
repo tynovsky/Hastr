@@ -8,10 +8,10 @@ use Hastr;
 my $config = plugin 'Config';
 my $hastr = 'Hastr'->new($config);
 
-get    '/'           => sub { $hastr->about(@_)       };
-get    '/file/:hash' => sub { $hastr->get_file(@_)    };
-post   '/file/:hash' => sub { $hastr->post_file(@_)   };
-delete '/file/:hash' => sub { $hastr->delete_file(@_) };
+get  '/'           => sub { $hastr->about(@_)       };
+get  '/file/:hash' => sub { $hastr->get_file(@_)    };
+post '/file/:hash' => sub { $hastr->post_file(@_)   };
+del  '/file/:hash' => sub { $hastr->delete_file(@_) };
 
 app->static->paths([$config->{root}]);
 app->start;

@@ -66,7 +66,12 @@ sub delete {
     my ($self, $node) = @_;
 
     $self->path->remove();
+    my $dir = $self->path->parent;
+    while (rmdir $dir) { $dir = $dir->parent };
+
     $self->backup_path($node)->remove();
+    $dir = $self->backup_path($node)->parent;
+    while (rmdir $dir) { $dir = $dir->parent };
 
 }
 

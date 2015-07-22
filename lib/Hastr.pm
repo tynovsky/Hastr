@@ -102,11 +102,48 @@ sub delete_file {
     $file->delete($backup_node);
 }
 
+sub change_backup_node_of_file {
+    my ($self, $file, $old_backup_node, $new_backup_node) = @_;
+
+    my $res;
+    # post the file to the new backup node
+    $res = $self->client->post_file(
+        node        => $new_backup_node,
+        hash        => $file->hash,
+        path        => $file->path,
+        backup_node => $self->{me},
+    );
+    return $res->code if $res->code != 200;
+
+    # delete the file from the old backup node
+    $res = $self->client->delete($old_backup_node, $file->hash, $self->{me});
+    warn 'failed to delete ' . $file->hash . "from $old_backup_node\n";
+
+    # move the symlink from the old backup dir to the new backup dir
+    try {
+        $file->backup_path($old_backup_node)->remove();
+    }
+    catch {
+        warn 'failed to remove symlink '
+            . $file->backup_path($old_backup_node) . ": $_\n";
+    };
+
+    try {
+        $file->create_backup_symlink($new_backup_node);
+    }
+    catch {
+        warn 'failed to create backup symlink: '
+            . $file->backup_path($new_backup_node) . ": $_\n";
+    }
+
+    return 200;
+}
+
 sub change_backup_node_of_random_file {
-    my ($self, $new_backup_node) = @_;
+    my ($self, $old_backup_node, $new_backup_node) = @_;
 
     # pick random mirror
-    my $old_backup_node = $self->pick_other_node();
+    $old_backup_node //= $self->pick_other_node();
     $new_backup_node //= $self->pick_other_node([$old_backup_node]);
 
     # from the old backup node, pick random file
@@ -116,23 +153,38 @@ sub change_backup_node_of_random_file {
         backups => $self->{backups},
     );
 
-    # post the file to the new backup node
-    #TODO: error handling
-    $self->client->post_file(
-        node        => $new_backup_node,
-        hash        => $file->hash,
-        path        => $file->path,
-        backup_node => $self->{me},
+    return $self->change_backup_node_of_file(
+        $file, $old_backup_node, $new_backup_node
     );
+}
 
-    # delete the file from the old backup node
-    #TODO: error handling
-    $self->client->delete($old_backup_node, $file->hash, $self->{me});
+sub exclude_node { # move all backups from the node elsewhere
+    my ($self, $node) = @_;
 
-    # move the symlink from the old backup dir to the new backup dir
-    #TODO: error handling
-    $file->backup_path($old_backup_node)->remove();
-    $file->create_backup_symlink($new_backup_node);
+    while (my $file = Hastr::File->random_from_backup_node($node)) {
+        my $new_backup_node = $self->pick_other_node([$node]);
+        my $result = $self->change_backup_node_of_file(
+            $file, $node, $new_backup_node
+        );
+        #TODO: co se soubory, ktere se nepovedly?
+        # uz existuje => smazat u me.
+        # jiny duvod => nedelat nic (priste se to zkusi zase na nahodny
+        #   node, tak to treba vyjde). Pocitat neuspechy jednotlivych
+        #   souboru. pri opakovanem neuspechu selhat.
+    }
+}
+
+sub fill_new_node {
+    my ($self, $node) = @_;
+
+    while (1) {
+        my $node_free = $self->client->get_info($node)->{percent_free};
+        my $self_free = $self->info()->{percent_free};
+
+      last if $node_free <= $self_free;
+
+        $self->change_backup_node_of_random_file(undef, $node);
+    }
 }
 
 sub pick_other_node {

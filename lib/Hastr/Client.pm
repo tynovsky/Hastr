@@ -5,6 +5,8 @@ use warnings;
 use Mojo::UserAgent;
 use Mojo::Asset::File;
 
+$ENV{MOJO_MAX_MESSAGE_SIZE} = 1024 ** 3; #1GB
+
 sub new {
     my ($class, $args) = @_;
     my %args = %{$args // {}};

@@ -146,6 +146,11 @@ sub change_backup_node_of_random_file {
     $old_backup_node //= $self->pick_other_node();
     $new_backup_node //= $self->pick_other_node([$old_backup_node]);
 
+    #FIXME
+    #this might happen if called with
+    # $old_backup_node = undef and $new_backup_node = some_node
+    return if $old_backup_node eq $new_backup_node;
+
     # from the old backup node, pick random file
     my $file = Hastr::File->random_from_backup_node(
         $old_backup_node,

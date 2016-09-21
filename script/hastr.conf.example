@@ -1,0 +1,10 @@
+{
+    root      => '/tmp/hastr3000/root',
+    backups   => '/tmp/hastr3000/backups',
+    me        => 'localhost:3000',
+    others    => [ qw(localhost:3001 localhost:3002 localhost:3003 localhost:3004) ],
+    hypnotoad => {
+        listen  => ['http://*:3000'],
+        workers => 10
+    }
+}

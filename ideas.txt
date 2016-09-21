@@ -1,0 +1,3 @@
+podle n-te cifry v hashi rozhodovat, zda pujde dotaz na n-ty node. Kazdy node pak ma svou cache.
+
+how to test it?
